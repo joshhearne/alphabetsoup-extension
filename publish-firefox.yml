@@ -1,0 +1,46 @@
+name: Publish to Firefox AMO
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'extension/**'
+      - '.github/workflows/publish-firefox.yml'
+
+jobs:
+  publish-firefox:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: extension
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: extension/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build + patch for Firefox
+        run: npm run build:firefox
+
+      - name: Copy static files to dist
+        run: |
+          cp manifest.json dist/
+          cp background.js dist/
+          cp content.js    dist/
+          cp -r icons      dist/icons
+
+      - name: Sign and submit to Firefox AMO
+        run: |
+          npx web-ext sign \
+            --source-dir dist \
+            --artifacts-dir artifacts \
+            --api-key ${{ secrets.FIREFOX_API_KEY }} \
+            --api-secret ${{ secrets.FIREFOX_API_SECRET }} \
+            --channel listed
