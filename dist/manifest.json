@@ -32,13 +32,6 @@
     "service_worker": "background.js"
   },
 
-  "content_scripts": [
-    {
-      "matches": ["<all_urls>"],
-      "js": ["content.js"]
-    }
-  ],
-
   "permissions": [
     "contextMenus",
     "storage",
