@@ -154,7 +154,60 @@ function Options() {
   const activeColors = colorblind ? COLORBLIND_THEME : colors;
   const gradientText = `linear-gradient(135deg, ${activeColors.nato}, ${activeColors.number}, ${activeColors.symbol}, ${activeColors.custom})`;
 
+  const [importError, setImportError] = useState("");
   const flashSaved = () => { setSaved(true); setTimeout(() => setSaved(false), 2000); };
+
+  // ── EXPORT ──────────────────────────────────────────────────────────────────
+  const exportSettings = () => {
+    const payload = {
+      version: 1,
+      exported: new Date().toISOString(),
+      settings: {
+        theme:          themePreference,
+        font,
+        colorblind,
+        colors,
+        verboseNumbers,
+        verboseSymbols,
+        customWords,
+      },
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href     = url;
+    a.download = "alphabetsoup-settings.json";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // ── IMPORT ──────────────────────────────────────────────────────────────────
+  const importSettings = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImportError("");
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const json = JSON.parse(ev.target.result);
+        if (!json.settings) throw new Error("Invalid file — missing settings key.");
+        const s = json.settings;
+        if (s.theme          !== undefined) setThemePreference(s.theme);
+        if (s.font           !== undefined) setFont(s.font);
+        if (s.colorblind     !== undefined) setColorblind(s.colorblind);
+        if (s.colors         !== undefined) setColors(s.colors);
+        if (s.verboseNumbers !== undefined) setVerboseNumbers(s.verboseNumbers);
+        if (s.verboseSymbols !== undefined) setVerboseSymbols(s.verboseSymbols);
+        if (s.customWords    !== undefined) setCustomWords(s.customWords);
+        flashSaved();
+      } catch (err) {
+        setImportError(err.message || "Failed to parse settings file.");
+      }
+    };
+    reader.readAsText(file);
+    // Reset input so same file can be re-imported
+    e.target.value = "";
+  };
 
   const addWord = () => {
     const letter = newLetter.toUpperCase().trim();
@@ -528,6 +581,54 @@ function Options() {
 
             </div>
           )}
+
+          {/* ══ IMPORT / EXPORT ══ */}
+          <div style={{
+            marginTop: "16px", paddingTop: "28px",
+            borderTop: `1px solid ${p.border}`,
+            display: "flex", flexDirection: "column", gap: "12px",
+          }}>
+            <div style={labelStyle}>Portable Settings</div>
+            <div style={{ display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
+
+              {/* Export */}
+              <button onClick={exportSettings} style={{
+                padding: "10px 22px", borderRadius: "6px", cursor: "pointer",
+                background: `${activeColors.nato}18`,
+                border: `1px solid ${activeColors.nato}55`,
+                color: activeColors.nato,
+                fontFamily: "'IBM Plex Mono', monospace",
+                fontSize: "12px", letterSpacing: "1px",
+                transition: "background 0.2s",
+              }}>
+                ↓ Export settings.json
+              </button>
+
+              {/* Import */}
+              <label style={{
+                padding: "10px 22px", borderRadius: "6px", cursor: "pointer",
+                background: `${activeColors.custom}18`,
+                border: `1px solid ${activeColors.custom}55`,
+                color: activeColors.custom,
+                fontFamily: "'IBM Plex Mono', monospace",
+                fontSize: "12px", letterSpacing: "1px",
+                transition: "background 0.2s",
+              }}>
+                ↑ Import settings.json
+                <input
+                  type="file" accept=".json" onChange={importSettings}
+                  style={{ display: "none" }}
+                />
+              </label>
+
+              {importError && (
+                <span style={{ fontSize: "11px", color: "#f87171" }}>{importError}</span>
+              )}
+            </div>
+            <div style={{ fontSize: "10px", color: p.textGhost, lineHeight: 1.6 }}>
+              Export your settings to a JSON file and import them on any device or in the web app at alphabetsoup.app
+            </div>
+          </div>
 
         </div>
       </div>
