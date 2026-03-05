@@ -224,10 +224,11 @@ function Popup() {
           background: isDark ? "#0d0d18" : "#ebebf3",
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <div style={{
+            <div key={gradientText} style={{
               fontSize: "15px", fontWeight: "800", letterSpacing: "-0.3px",
               background: gradientText,
-              WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
+              WebkitBackgroundClip: "text", backgroundClip: "text",
+              WebkitTextFillColor: "transparent", color: "transparent",
             }}>
               AlphabetSoup
             </div>
