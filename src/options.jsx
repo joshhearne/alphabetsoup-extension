@@ -151,8 +151,7 @@ function Options() {
 
   const isDark       = themePreference === "system" ? systemDark : themePreference === "dark";
   const p            = isDark ? DARK : LIGHT;
-  const activeColors = colorblind ? COLORBLIND_THEME : colors;
-  const gradientText = `linear-gradient(135deg, ${activeColors.nato}, ${activeColors.number}, ${activeColors.symbol}, ${activeColors.custom})`;
+  const activeColors = colorblind ? COLORBLIND_THEME : (colors || DEFAULT_THEME);
 
   const [importError, setImportError] = useState("");
   const flashSaved = () => { setSaved(true); setTimeout(() => setSaved(false), 2000); };
@@ -253,6 +252,8 @@ function Options() {
 
   if (!themeReady) return null;
 
+  const gradientText = `linear-gradient(135deg, ${activeColors.nato}, ${activeColors.number}, ${activeColors.symbol}, ${activeColors.custom})`;
+
   const tabs = [
     { key: "custom", label: "Custom Words", icon: "🌶️" },
     { key: "style",  label: "Style",        icon: "🎨" },
@@ -295,10 +296,10 @@ function Options() {
             height: "64px",
           }}>
             <div>
-              <div style={{
+              <div key={gradientText} style={{
                 fontSize: "20px", fontWeight: "800", letterSpacing: "-0.5px",
                 background: gradientText,
-                WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
+                WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent", color: "transparent",
               }}>AlphabetSoup</div>
               <div style={{ fontSize: "9px", color: p.textFaint, letterSpacing: "3px", textTransform: "uppercase" }}>
                 Settings
