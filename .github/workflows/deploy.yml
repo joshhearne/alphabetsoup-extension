@@ -12,13 +12,13 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
+      - name: Build extension
+        run: npm ci && npm run build
+
       - name: Package extension
         run: |
-          zip -r extension.zip . \
-            --exclude "*.git*" \
-            --exclude ".github/*" \
-            --exclude "*.md" \
-            --exclude "*.zip"
+          zip -r extension.zip dist/ \
+            --exclude "*.map"
 
       - name: Upload to Chrome Web Store
         uses: mnao305/chrome-extension-upload@v5.0.0
