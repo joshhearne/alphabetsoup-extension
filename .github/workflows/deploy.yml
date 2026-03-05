@@ -15,6 +15,11 @@ jobs:
       - name: Build extension
         run: npm ci && npm run build
 
+      - name: Set version from tag
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          jq --arg v "$VERSION" '.version = $v' dist/manifest.json > tmp.json && mv tmp.json dist/manifest.json
+
       - name: Package extension
         run: |
           zip -r extension.zip dist/ \
