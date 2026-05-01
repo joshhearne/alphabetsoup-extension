@@ -1,0 +1,35 @@
+name: Deploy to Edge Add-ons
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Build extension
+        run: npm ci && npm run build:edge
+
+      - name: Set version from tag
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          jq --arg v "$VERSION" '.version = $v' dist-edge/manifest.json > tmp.json && mv tmp.json dist-edge/manifest.json
+
+      - name: Package extension
+        run: |
+          cd dist-edge && zip -r ../alphabetsoup-edge.zip . \
+            --exclude "*.map"
+
+      - name: Upload to Edge Add-ons
+        uses: nicolo-ribaudo/publish-edge-extension@v1
+        with:
+          zip-path: alphabetsoup-edge.zip
+          product-id: ${{ secrets.EDGE_PRODUCT_ID }}
+          client-id: ${{ secrets.EDGE_CLIENT_ID }}
+          client-secret: ${{ secrets.EDGE_CLIENT_SECRET }}
+          access-token-url: ${{ secrets.EDGE_ACCESS_TOKEN_URL }}

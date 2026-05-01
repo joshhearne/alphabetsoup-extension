@@ -2,10 +2,12 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { resolve } from "path";
 
+const browser = process.env.BROWSER || "chrome";
+
 export default defineConfig({
   plugins: [react()],
   build: {
-    outDir: "dist",
+    outDir: `dist-${browser}`,
     emptyOutDir: true,
     rollupOptions: {
       input: {
