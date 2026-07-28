@@ -165,6 +165,9 @@ jobs:
           source-path: alphabetsoup-source.zip
           channel: listed
           compatibility-firefox-min: '115.0'
+          # Must match the repo LICENSE and the slug already on the AMO
+          # listing; the action sends license=undefined if this is omitted.
+          license: MIT
           release-note: ${{ steps.notes.outputs.notes }}
           auth-api-issuer: ${{ secrets.AMO_API_KEY }}
           auth-api-secret: ${{ secrets.AMO_API_SECRET }}
