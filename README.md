@@ -54,8 +54,21 @@ block the other two.
 | `firefox` | Firefox AMO | `build:firefox` |
 
 `workflow_dispatch` accepts a version input for re-running a release without
-cutting a new tag. Built zips are also uploaded as run artifacts for manual
-store submission if an upload step fails.
+cutting a new tag, plus a `targets` input (default `chrome,edge,firefox`) to
+publish a subset. Use `targets` to retry one store that failed while the others
+already shipped that version — re-running all three would be rejected as a
+duplicate version by the stores that succeeded:
+
+```bash
+gh workflow run Release -f version=1.2.2 -f targets=firefox
+```
+
+Built zips are also uploaded as run artifacts for manual store submission if an
+upload step fails.
+
+AMO rejects a blank release notes field. The workflow uses the annotated tag's
+message when there is one and otherwise generates a line pointing at the GitHub
+release, so a lightweight tag still publishes.
 
 ### Required GitHub Secrets
 

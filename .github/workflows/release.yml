@@ -9,6 +9,10 @@ on:
       version:
         description: 'Version to publish, e.g. 1.2.2 (no leading v)'
         required: true
+      targets:
+        description: 'Comma-separated stores to publish. Use this to retry a single store that failed while the others already shipped the version.'
+        required: false
+        default: chrome,edge,firefox
 
 jobs:
   version:
@@ -16,16 +20,20 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.resolve.outputs.version }}
+      targets: ${{ steps.resolve.outputs.targets }}
     steps:
-      - name: Resolve version
+      - name: Resolve version and targets
         id: resolve
         env:
           INPUT_VERSION: ${{ inputs.version }}
+          INPUT_TARGETS: ${{ inputs.targets }}
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             VERSION="${INPUT_VERSION}"
+            TARGETS="${INPUT_TARGETS}"
           else
             VERSION="${GITHUB_REF_NAME}"
+            TARGETS="chrome,edge,firefox"
           fi
           VERSION="${VERSION#v}"
           # Chrome, Edge and AMO all accept x.y.z; reject anything else so the
@@ -34,8 +42,14 @@ jobs:
             echo "::error::Version '$VERSION' is not x.y.z"
             exit 1
           fi
+          if ! printf '%s' "$TARGETS" | grep -Eq '^(chrome|edge|firefox)(,(chrome|edge|firefox))*$'; then
+            echo "::error::Targets '$TARGETS' must be a comma-separated subset of chrome,edge,firefox"
+            exit 1
+          fi
+          JSON=$(printf '%s' "$TARGETS" | jq -Rc 'split(",")')
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "Publishing $VERSION to all stores."
+          echo "targets=$JSON" >> "$GITHUB_OUTPUT"
+          echo "Publishing $VERSION to $TARGETS."
 
   publish:
     name: Publish ${{ matrix.target }}
@@ -45,7 +59,7 @@ jobs:
       # One store rejecting a build must not stop the other two.
       fail-fast: false
       matrix:
-        target: [chrome, edge, firefox]
+        target: ${{ fromJSON(needs.version.outputs.targets) }}
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -116,6 +130,32 @@ jobs:
           client-id: ${{ secrets.EDGE_CLIENT_ID }}
           api-key: ${{ secrets.EDGE_API_KEY }}
 
+      - name: Resolve AMO release notes
+        if: matrix.target == 'firefox'
+        id: notes
+        # AMO rejects a blank release_notes with 400, so this must always
+        # produce something. Annotated tag message if there is one, else a
+        # generated line pointing at the GitHub release.
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          NOTES=""
+          # Only an annotated tag has its own message. For a lightweight tag
+          # git falls back to the commit message, which is not release notes.
+          if [ "${{ github.event_name }}" = "push" ] && \
+             [ "$(git cat-file -t "$GITHUB_REF_NAME" 2>/dev/null)" = "tag" ]; then
+            NOTES=$(git tag -l --format='%(contents:subject)%0a%0a%(contents:body)' "$GITHUB_REF_NAME")
+          fi
+          NOTES=$(printf '%s' "$NOTES" | sed -e 's/[[:space:]]*$//')
+          if [ -z "$NOTES" ]; then
+            NOTES="AlphabetSoup $VERSION. Release details: https://github.com/${GITHUB_REPOSITORY}/releases/tag/v${VERSION}"
+          fi
+          {
+            echo "notes<<AMO_NOTES_EOF"
+            printf '%s\n' "$NOTES"
+            echo "AMO_NOTES_EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Publish to Firefox Add-ons
         if: matrix.target == 'firefox'
         uses: browser-actions/release-firefox-addon@v0.2.1
@@ -125,5 +165,6 @@ jobs:
           source-path: alphabetsoup-source.zip
           channel: listed
           compatibility-firefox-min: '115.0'
+          release-note: ${{ steps.notes.outputs.notes }}
           auth-api-issuer: ${{ secrets.AMO_API_KEY }}
           auth-api-secret: ${{ secrets.AMO_API_SECRET }}
