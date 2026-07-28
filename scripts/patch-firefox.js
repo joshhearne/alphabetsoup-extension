@@ -17,7 +17,9 @@ const manifest     = JSON.parse(readFileSync(manifestPath, "utf8"));
 manifest.browser_specific_settings = {
   gecko: {
     id: "alphabetsoup@hearnetech.com",
-    strict_min_version: "109.0",
+    // 115 is the first Firefox with chrome.storage.session, which background.js
+    // and popup.jsx use to hand off the right-click selection.
+    strict_min_version: "115.0",
   },
 };
 

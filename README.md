@@ -40,13 +40,22 @@ npm run zip:firefox     # → alphabetsoup-firefox.zip
 
 ## CI/CD — GitHub Actions
 
-Pushing a `v*` tag triggers deploy workflows for all three stores in parallel.
+Pushing a `v*` tag runs `release.yml`, which publishes all three stores from a
+single matrix job. The version is taken from the tag (`v1.2.2` → `1.2.2`),
+stamped into `public/manifest.json` and `package.json` **before** the build, and
+verified in each built manifest — so Chrome, Edge and Firefox always ship the
+same version number. `fail-fast` is off, so one store rejecting a build does not
+block the other two.
 
-| Workflow | Store | Build |
-|----------|-------|-------|
-| `deploy.yml` | Chrome Web Store | `build:chrome` |
-| `deploy-edge.yml` | Edge Add-ons | `build:edge` |
-| `deploy-firefox.yml` | Firefox AMO | `build:firefox` |
+| Matrix target | Store | Build |
+|---------------|-------|-------|
+| `chrome` | Chrome Web Store | `build:chrome` |
+| `edge` | Edge Add-ons | `build:edge` |
+| `firefox` | Firefox AMO | `build:firefox` |
+
+`workflow_dispatch` accepts a version input for re-running a release without
+cutting a new tag. Built zips are also uploaded as run artifacts for manual
+store submission if an upload step fails.
 
 ### Required GitHub Secrets
 
@@ -63,9 +72,8 @@ Guide: https://developer.chrome.com/docs/webstore/using-api
 | Secret | Where to get it |
 |--------|----------------|
 | `EDGE_PRODUCT_ID` | Edge Partner Center → your extension's product ID |
-| `EDGE_CLIENT_ID` | Azure AD app registration |
-| `EDGE_CLIENT_SECRET` | Same app registration |
-| `EDGE_ACCESS_TOKEN_URL` | Azure AD token endpoint |
+| `EDGE_CLIENT_ID` | Edge Partner Center → Publish API → client ID |
+| `EDGE_API_KEY` | Edge Partner Center → Publish API → API key |
 
 Guide: https://learn.microsoft.com/en-us/microsoft-edge/extensions-chromium/publish/api/using-addons-api
 
@@ -97,9 +105,7 @@ Use the export/import feature to sync settings between web app, extension, and d
 ├── scripts/
 │   └── patch-firefox.js       # Patches manifest for Firefox (gecko ID, background.scripts)
 ├── .github/workflows/
-│   ├── deploy.yml             # Chrome Web Store deploy
-│   ├── deploy-edge.yml        # Edge Add-ons deploy
-│   └── deploy-firefox.yml     # Firefox AMO deploy
+│   └── release.yml            # Tag-driven publish to all three stores
 ├── vite.config.js
 └── package.json
 ```

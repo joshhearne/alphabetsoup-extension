@@ -1,0 +1,129 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish, e.g. 1.2.2 (no leading v)'
+        required: true
+
+jobs:
+  version:
+    name: Resolve version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+    steps:
+      - name: Resolve version
+        id: resolve
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${INPUT_VERSION}"
+          else
+            VERSION="${GITHUB_REF_NAME}"
+          fi
+          VERSION="${VERSION#v}"
+          # Chrome, Edge and AMO all accept x.y.z; reject anything else so the
+          # three stores can never diverge on a version one of them rejects.
+          if ! printf '%s' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Version '$VERSION' is not x.y.z"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Publishing $VERSION to all stores."
+
+  publish:
+    name: Publish ${{ matrix.target }}
+    needs: version
+    runs-on: ubuntu-latest
+    strategy:
+      # One store rejecting a build must not stop the other two.
+      fail-fast: false
+      matrix:
+        target: [chrome, edge, firefox]
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Stamp version
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          jq --arg v "$VERSION" '.version = $v' public/manifest.json > manifest.tmp
+          mv manifest.tmp public/manifest.json
+          npm pkg set version="$VERSION"
+
+      - name: Build extension
+        run: npm run build:${{ matrix.target }}
+
+      - name: Verify built manifest version
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          BUILT=$(jq -r .version dist-${{ matrix.target }}/manifest.json)
+          if [ "$BUILT" != "$VERSION" ]; then
+            echo "::error::dist-${{ matrix.target }}/manifest.json is $BUILT, expected $VERSION"
+            exit 1
+          fi
+
+      - name: Package extension
+        run: |
+          cd dist-${{ matrix.target }}
+          zip -r ../alphabetsoup-${{ matrix.target }}.zip . --exclude "*.map"
+
+      - name: Package source for AMO review
+        if: matrix.target == 'firefox'
+        # Tracked files from the working tree, not `git archive HEAD`, so the
+        # stamped version is what reviewers build from.
+        run: git ls-files -z | xargs -0 zip -q alphabetsoup-source.zip
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: alphabetsoup-${{ matrix.target }}-${{ needs.version.outputs.version }}
+          path: alphabetsoup-${{ matrix.target }}.zip
+
+      - name: Publish to Chrome Web Store
+        if: matrix.target == 'chrome'
+        uses: mnao305/chrome-extension-upload@v6.0.0
+        with:
+          file-path: alphabetsoup-chrome.zip
+          extension-id: loekomefinlhckgbbnbfhibnogapoigo
+          client-id: ${{ secrets.CWS_CLIENT_ID }}
+          client-secret: ${{ secrets.CWS_CLIENT_SECRET }}
+          refresh-token: ${{ secrets.CWS_REFRESH_TOKEN }}
+
+      - name: Publish to Edge Add-ons
+        if: matrix.target == 'edge'
+        uses: wdzeng/edge-addon@v2.1.1
+        with:
+          product-id: ${{ secrets.EDGE_PRODUCT_ID }}
+          zip-path: alphabetsoup-edge.zip
+          client-id: ${{ secrets.EDGE_CLIENT_ID }}
+          api-key: ${{ secrets.EDGE_API_KEY }}
+
+      - name: Publish to Firefox Add-ons
+        if: matrix.target == 'firefox'
+        uses: browser-actions/release-firefox-addon@v0.2.1
+        with:
+          addon-id: alphabetsoup@hearnetech.com
+          addon-path: alphabetsoup-firefox.zip
+          source-path: alphabetsoup-source.zip
+          channel: listed
+          compatibility-firefox-min: '115.0'
+          auth-api-issuer: ${{ secrets.AMO_API_KEY }}
+          auth-api-secret: ${{ secrets.AMO_API_SECRET }}
